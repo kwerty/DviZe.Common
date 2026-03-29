@@ -6,16 +6,18 @@ A runner which provides access to a shared worker of type `TWorker`. Workers are
 
 The following constructors are available.
 
-* `public OnDemand(ILoggerFactory loggerFactory)`
-* `public OnDemand(OnDemandOptions options, ILoggerFactory loggerFactory)`
-* `public OnDemand(Func<TWorker> workerFactory, ILoggerFactory loggerFactory)`
-* `public OnDemand(OnDemandOptions options, Func<TWorker> workerFactory, ILoggerFactory loggerFactory)`
+```csharp
+public OnDemand(ILoggerFactory loggerFactory);
+public OnDemand(OnDemandOptions options, ILoggerFactory loggerFactory);
+public OnDemand(Func<TWorker> workerFactory, ILoggerFactory loggerFactory);
+public OnDemand(OnDemandOptions options, Func<TWorker> workerFactory, ILoggerFactory loggerFactory);
+```
 
 If a `workerFactory` is not provided, `TWorker` **must** have a parameterless constructor.
 
 `loggerFactory` will be used to log any unhandled exceptions that occur when the worker is starting or stopping.
 
-## Release policy
+### Release policy
 
 The worker's lifecycle is governed by the `OnDemandReleasePolicy` defined in `OnDemandOptions`:
 
@@ -25,7 +27,11 @@ The worker's lifecycle is governed by the `OnDemandReleasePolicy` defined in `On
 
 ## Members
 
-### `public Task<WorkerLease<TWorker>> LeaseAsync(CancellationToken cancellationToken = default)`
+### LeaseAsync
+
+```csharp
+public Task<WorkerLease<TWorker>> LeaseAsync(CancellationToken cancellationToken = default);
+```
 
 Provides access to a shared worker. The returned `WorkerLease<TWorker>` includes the worker and a `Releaser` (`IDisposable`).
 
@@ -45,7 +51,11 @@ If a vote to cancel succeeds (see below), `OperationCanceledException` will be t
 
 * The worker is not required to honour cancellation.
 
-### `public ValueTask DisposeAsync()`
+### DisposeAsync
+
+```csharp
+public ValueTask DisposeAsync();
+```
 
 Disposes the runner, and if there is an active worker, it begins the process of stopping that worker. Completes once the worker has stopped.
 

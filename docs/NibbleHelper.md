@@ -4,25 +4,45 @@ Static helper methods for splitting and combining the two nibbles (4-bit halves)
 
 ## Members
 
-### `public static byte CombineNibbles(byte high, byte low)`
+### CombineNibbles
+
+```csharp
+public static byte CombineNibbles(byte high, byte low);
+```
 
 Combines `high` and `low` into a single byte.
 
 Throws `ArgumentOutOfRangeException` if either `high` or `low` exceeds `0x0F`.
 
-### `public static byte GetHighNibble(byte value)`
+### GetHighNibble
+
+```csharp
+public static byte GetHighNibble(byte value);
+```
 
 Extracts the value stored in the high nibble of `value`.
 
-### `public static byte GetLowNibble(byte value)`
+### GetLowNibble
+
+```csharp
+public static byte GetLowNibble(byte value);
+```
 
 Extracts the value stored in the low nibble of `value`.
 
-### `public static byte UnsetHighNibble(byte value)`
+### UnsetHighNibble
+
+```csharp
+public static byte UnsetHighNibble(byte value);
+```
 
 Returns a copy of `value` with the high nibble zeroed out.
 
-### `public static byte UnsetLowNibble(byte value)`
+### UnsetLowNibble
+
+```csharp
+public static byte UnsetLowNibble(byte value);
+```
 
 Returns a copy of `value` with the low nibble zeroed out.
 

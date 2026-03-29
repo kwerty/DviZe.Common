@@ -1,14 +1,16 @@
 # PairWith
 
-A LINQ extension that pairs elements from two sequences by key or predicate, yielding `Pair<TLeft, TRight>` results. Each left element is paired with at most one right element, and unmatched elements from either side are yielded as half-pairs.
+An `IEnumerable<T>` extension that pairs elements from two sequences by key or predicate, yielding `Pair<TLeft, TRight>` results. Each left element is paired with at most one right element, and unmatched elements from either side are yielded as half-pairs.
 
-## Members
-
-### `public IEnumerable<Pair<TLeft, TRight>> PairWith<TLeft, TRight, TKey>(IEnumerable<TRight> right, Func<TLeft, TKey> leftKeySelector, Func<TRight, TKey> rightKeySelector)`
+```csharp
+public IEnumerable<Pair<TLeft, TRight>> PairWith<TLeft, TRight, TKey>(IEnumerable<TRight> right, Func<TLeft, TKey> leftKeySelector, Func<TRight, TKey> rightKeySelector);
+```
 
 Matches elements from the left and right sequences by comparing keys extracted via `leftKeySelector` and `rightKeySelector`.
 
-### `public IEnumerable<Pair<TLeft, TRight>> PairWith<TLeft, TRight>(IEnumerable<TRight> right, Func<TLeft, TRight, bool> comparer)`
+```csharp
+public IEnumerable<Pair<TLeft, TRight>> PairWith<TLeft, TRight>(IEnumerable<TRight> right, Func<TLeft, TRight, bool> comparer);
+```
 
 Matches elements from the left and right sequences using a custom `comparer` predicate.
 
@@ -18,6 +20,7 @@ The setup.
 
 ```csharp
 record Student(int Id, string Name);
+
 record Score(int StudentId, int Value);
 
 List<Student> students =

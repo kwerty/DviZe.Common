@@ -4,13 +4,19 @@ An async implementation of `Lazy<T>`.
 
 ## Constructor
 
-### `public AsyncLazy(Func<CancellationToken, Task<T>> valueFactory)`
+```csharp
+public AsyncLazy(Func<CancellationToken, Task<T>> valueFactory);
+```
 
 Pass your value factory to the constructor.
 
 ## Members
 
-### `public Task<T> GetValueAsync(CancellationToken cancellationToken = default)`
+### GetValueAsync
+
+```csharp
+public Task<T> GetValueAsync(CancellationToken cancellationToken = default);
+```
 
 Starts or joins an existing attempt to get a value from the value factory.
 

@@ -4,7 +4,11 @@ Worker is an abstract base class. It represents a background work item, and is i
 
 ## Members
 
-### `protected virtual Task OnStartingAsync(WorkerStartingContext startingContext)`
+### OnStartingAsync
+
+```csharp
+protected virtual Task OnStartingAsync(WorkerStartingContext startingContext);
+```
 
 Implementations may override this to define initialisation logic.
 
@@ -14,7 +18,11 @@ If the implementation throws, the exception will be handled by the runner and pr
 
 Calling `base.OnStartingAsync` is a no-op.
 
-### `protected virtual Task OnStoppingAsync()`
+### OnStoppingAsync
+
+```csharp
+protected virtual Task OnStoppingAsync();
+```
 
 Implementations may override this to define teardown logic.
 
@@ -24,7 +32,11 @@ This method is not called if the worker fails to start.
 
 Calling `base.OnStoppingAsync` is a no-op.
 
-### `protected WorkerContext Context { get; }`
+### Context
+
+```csharp
+protected WorkerContext Context { get; }
+```
 
 Provides the worker with access to its own state.
 

@@ -4,13 +4,19 @@ A runner which executes and manages multiple workers of type `TWorker`.
 
 ## Constructor
 
-### `public Runner(ILoggerFactory loggerFactory)`
+```csharp
+public Runner(ILoggerFactory loggerFactory);
+```
 
 `loggerFactory` will be used to log any unhandled exceptions that occur when a worker is starting or stopping.
 
 ## Members
 
-### `public Task StartWorkerAsync(TWorker worker, CancellationToken cancellationToken = default)`
+### StartWorkerAsync
+
+```csharp
+public Task StartWorkerAsync(TWorker worker, CancellationToken cancellationToken = default);
+```
 
 Takes ownership of a worker, then asynchronously starts it.
 
@@ -22,7 +28,11 @@ Throws `InvalidOperationException` if the provided worker is owned elsewhere.
 
 Throws `ObjectDisposedException` if this runner has been disposed.
 
-### `public ValueTask DisposeAsync()`
+### DisposeAsync
+
+```csharp
+public ValueTask DisposeAsync();
+```
 
 Disposes the runner, and begins the process of stopping all workers. Completes once all workers have stopped.
 

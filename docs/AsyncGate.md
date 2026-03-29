@@ -4,13 +4,21 @@ Controls concurrent access to a shared resource like a gate: `Enter` grants user
 
 ## Members
 
-### `public IDisposable Enter()`
+### Enter
+
+```csharp
+public IDisposable Enter();
+```
 
 Permits one user to enter, or throws `ObjectDisposedException` if the gate is closed (or in the process of being closed).
 
 Returns an `IDisposable` which **must** be disposed when the user is done. It is recommend that all calls to `Enter` happen in a `using` block (see example below).
 
-### `public ValueTask DisposeAsync()`
+### DisposeAsync
+
+```csharp
+public ValueTask DisposeAsync();
+```
 
 Closes the gate, preventing future access, and asynchronously waits for all existing users to leave.
 

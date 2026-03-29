@@ -4,7 +4,9 @@ Defines the retry behavior for an operation, including attempt limits, delay dur
 
 ## Constructor
 
-### `public RetryPolicy(TimeSpan baseDelay, int? maxRetries = null, RetryPolicyBackoffType backoffType = RetryPolicyBackoffType.Constant, TimeSpan? maxDelay = null)`
+```csharp
+public RetryPolicy(TimeSpan baseDelay, int? maxRetries = null, RetryPolicyBackoffType backoffType = RetryPolicyBackoffType.Constant, TimeSpan? maxDelay = null);
+```
 
 `baseDelay` is the initial delay between attempts.
 
@@ -18,7 +20,11 @@ Defines the retry behavior for an operation, including attempt limits, delay dur
 
 Cast to `IDelayGenerator` to access the retry policy as a consumer.
 
-### `public bool TryNext(int attempt, out TimeSpan delay)`
+### TryNext
+
+```csharp
+public bool TryNext(int attempt, out TimeSpan delay);
+```
 
 Returns `true` if the attempt should proceed, with `delay` representing how long to wait beforehand. Returns `false` if the retry limit has been reached.
 

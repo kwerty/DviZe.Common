@@ -2,9 +2,9 @@
 
 Extension methods for reading and manipulating the individual bits of a number type `T`.
 
-## Members
-
-### `public bool IsBitSet(int idx)`
+```csharp
+public bool IsBitSet(int idx);
+```
 
 Returns `true` if the bit at position `idx` is `1`.
 
@@ -12,19 +12,27 @@ Returns `true` if the bit at position `idx` is `1`.
 
 Throws `ArgumentOutOfRangeException` if `idx` is negative or exceeds the bit width of `T`.
 
-### `public T ReplaceBit(int idx, bool value)`
+```csharp
+public T ReplaceBit(int idx, bool value);
+```
 
 Returns a copy of the number with the bit at position `idx` set according to `value`.
 
-### `public T SetBit(int idx)`
+```csharp
+public T SetBit(int idx);
+```
 
 Returns a copy of the number with the bit at position `idx` set to `1`.
 
-### `public T UnsetBit(int idx)`
+```csharp
+public T UnsetBit(int idx);
+```
 
 Returns a copy of the number with the bit at position `idx` set to `0`.
 
-### `public static T FromBits(params bool[] bits)`
+```csharp
+public static T FromBits(params bool[] bits);
+```
 
 Constructs a number `T` from an array of booleans ordered from least to most significant bit.
 
