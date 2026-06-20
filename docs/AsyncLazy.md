@@ -5,10 +5,10 @@ An async implementation of `Lazy<T>`.
 ## Constructor
 
 ```csharp
-public AsyncLazy(Func<CancellationToken, Task<T>> valueFactory);
+public AsyncLazy(Func<CancellationToken, Task<T>> valueFactory, bool canRetry = false);
 ```
 
-Pass your value factory to the constructor.
+Set `canRetry` to `true` to allow retrying after after a factory exception.
 
 ## Members
 
@@ -20,7 +20,7 @@ public Task<T> GetValueAsync(CancellationToken cancellationToken = default);
 
 Starts or joins an existing attempt to get a value from the value factory.
 
-If the value factory throws an exception it will be thrown here, and all future calls to `GetValueAsync` will rethrow the same exception.
+If the value factory throws an exception it will be thrown here. If retries are not enabled (default), subsequent calls to `GetValueAsync` will throw the same exception.
 
 If a vote to cancel succeeds (see below), `OperationCanceledException` will be thrown, and `GetValueAsync` can be called again to retry.
 

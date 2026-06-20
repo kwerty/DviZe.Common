@@ -8,12 +8,14 @@ public sealed partial class AsyncLazy<T>
 {
     readonly Lock lockObj = new();
     readonly Func<CancellationToken, Task<T>> valueFactory;
+    readonly bool canRetry;
     Session session;
 
-    public AsyncLazy(Func<CancellationToken, Task<T>> valueFactory)
+    public AsyncLazy(Func<CancellationToken, Task<T>> valueFactory, bool canRetry = false)
     {
         ArgumentNullException.ThrowIfNull(valueFactory, nameof(valueFactory));
         this.valueFactory = valueFactory;
+        this.canRetry = canRetry;
     }
 
     Session GetSession()
@@ -23,7 +25,7 @@ public sealed partial class AsyncLazy<T>
             if (session == null
                 || session.Closed)
             {
-                session = new Session(valueFactory);
+                session = new Session(valueFactory, canRetry);
             }
 
             return session;

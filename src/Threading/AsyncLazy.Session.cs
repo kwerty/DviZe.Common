@@ -12,7 +12,7 @@ partial class AsyncLazy<T>
         readonly CancellationTokenSource cts = new();
         int uncancelledCount;
 
-        public Session(Func<CancellationToken, Task<T>> valueFactory)
+        public Session(Func<CancellationToken, Task<T>> valueFactory, bool canRetry)
         {
             runTask = Task.Run(async () =>
             {
@@ -21,6 +21,11 @@ partial class AsyncLazy<T>
                     return await valueFactory(cts.Token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (cts.IsCancellationRequested)
+                {
+                    Closed = true;
+                    throw;
+                }
+                catch when (canRetry)
                 {
                     Closed = true;
                     throw;
