@@ -8,7 +8,7 @@ An async implementation of `Lazy<T>`.
 public AsyncLazy(Func<CancellationToken, Task<T>> valueFactory, bool canRetry = false);
 ```
 
-Set `canRetry` to `true` to allow retrying after after a factory exception.
+Set `canRetry` to `true` to allow retrying after a factory exception.
 
 ## Members
 
