@@ -13,8 +13,8 @@ partial class OnDemand<TWorker>
         readonly AsyncGate initGate = new();
         readonly AsyncLazy<(TWorker, WorkerContext<TWorker>)> initLazy;
         readonly OnDemandOptions options;
-        TWorker innerWorker;
-        WorkerContext<TWorker> innerWorkerContext;
+        volatile TWorker innerWorker;
+        volatile WorkerContext<TWorker> innerWorkerContext;
         int userCount; // Not meaningful when ReleasePolicy == NeverRelease; Access via CachedResult does not count.
         Timer releaseDelayTimer;
         object releaseToken;
@@ -29,7 +29,7 @@ partial class OnDemand<TWorker>
                 var workerContext = new WorkerContext<TWorker>(worker, loggerFactory);
                 await workerContext.StartAsync(ct).ConfigureAwait(false);
                 return (worker, workerContext);
-            });
+            }, options.CanRetry);
         }
 
         public bool Closed => Context.StoppingToken.IsCancellationRequested;
@@ -64,14 +64,17 @@ partial class OnDemand<TWorker>
                 {
                     (innerWorker, innerWorkerContext) = await initLazy.GetValueAsync(cancellationToken).ConfigureAwait(false);
 
-                    if (options.ReleasePolicy == OnDemandReleasePolicy.NeverRelease)
+                    if (options.ReleasePolicy.Type == OnDemandReleasePolicyType.NeverRelease)
                     {
                         CachedResult = Task.FromResult(innerWorker);
                     }
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    CachedResult = Task.FromException<TWorker>(ex);
+                    if (!options.CanRetry)
+                    {
+                        CachedResult = Task.FromException<TWorker>(ex);
+                    }
                     throw;
                 }
             }
@@ -96,17 +99,17 @@ partial class OnDemand<TWorker>
                     return;
                 }
 
-                // This if statement ensures the Session remains open if the worker never started.
+                // Session remains open if no worker has started.
                 if (innerWorker != null)
                 {
-                    if (options.ReleasePolicy == OnDemandReleasePolicy.ReleaseImmediately)
+                    if (options.ReleasePolicy.Type == OnDemandReleasePolicyType.ReleaseImmediately)
                     {
                         Close();
                     }
-                    else if (options.ReleasePolicy == OnDemandReleasePolicy.ReleaseAfterDelay)
+                    else if (options.ReleasePolicy.Type == OnDemandReleasePolicyType.ReleaseAfterDelay)
                     {
                         releaseToken = new object();
-                        releaseDelayTimer = new Timer(Close, releaseToken, options.ReleaseDelay.Value, Timeout.InfiniteTimeSpan);
+                        releaseDelayTimer = new Timer(Close, releaseToken, options.ReleasePolicy.Delay.Value, Timeout.InfiniteTimeSpan);
                     }
                 }
             }
@@ -135,7 +138,7 @@ partial class OnDemand<TWorker>
         {
             await initGate.DisposeAsync().ConfigureAwait(false);
 
-            if (innerWorkerContext != null)
+            if (innerWorkerContext != null) // Gate must be closed first.
             {
                 await innerWorkerContext.DisposeAsync().ConfigureAwait(false);
             }

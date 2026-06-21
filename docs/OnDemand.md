@@ -4,8 +4,6 @@ A runner which provides access to a shared worker of type `TWorker`. Workers are
 
 ## Constructors
 
-The following constructors are available.
-
 ```csharp
 public OnDemand(ILoggerFactory loggerFactory);
 public OnDemand(OnDemandOptions options, ILoggerFactory loggerFactory);
@@ -17,13 +15,27 @@ If a `workerFactory` is not provided, `TWorker` **must** have a parameterless co
 
 `loggerFactory` will be used to log any unhandled exceptions that occur when the worker is starting or stopping.
 
-### Release policy
+### OnDemandOptions
 
-The worker's lifecycle is governed by the `OnDemandReleasePolicy` defined in `OnDemandOptions`:
+| Property          | Type                      | Description
+| :--               | :--                       | :--
+| `CanRetry`        | `bool`                    | Set to `true` to allow retrying after a worker factory exception.
+| `ReleasePolicy`   | `OnDemandReleasePolicy`   | Controls when the worker is stopped and released.
 
-* **`ReleaseImmediately`** (Default): The worker is stopped and released when it is no longer in use.
-* **`ReleaseAfterDelay`**: When the worker is no longer in use, continue to hold it for a specified period (`ReleaseDelay`) before releasing. If `LeaseAsync` is called during this window, the timer is cancelled, and the worker remains active.
-* **`NeverRelease`**: The worker is held until `DisposeAsync` is called.
+### OnDemandReleasePolicy
+
+| Property | Type                           | Description
+| :--      | :--                            | :--
+| `Type`   | `OnDemandReleasePolicyType`    | See types below.
+| `Delay`  | `TimeSpan?`                    | Applicable when `Type` is `OnDemandReleasePolicyType.ReleaseAfterDelay`.
+
+### OnDemandReleasePolicyType
+
+| Value                 | Description
+| :--                   | :--
+| `ReleaseImmediately`  | The worker is stopped and released when it is no longer in use.
+| `ReleaseAfterDelay`   | When the worker is no longer in use, continue to hold it for a specified period (`Delay`) before releasing. If `LeaseAsync` is called during this window, the timer is cancelled, and the worker remains active.
+| `NeverRelease`        | The worker is held until `DisposeAsync` is called.
 
 ## Members
 
@@ -37,7 +49,7 @@ Provides access to a shared worker. The returned `WorkerLease<TWorker>` includes
 
 The `Releaser` **must** be disposed when the worker is no longer in use to trigger the release policy. Otherwise the worker will remain active for the remainder of the runner's lifetime. If the `ReleasePolicy` is set to `NeverRelease`, disposing the releaser is not required.
 
-If the worker factory throws an exception, or if the worker fails to start due to an exception, then the exception is thrown here, and all future calls to `LeaseAsync` will rethrow the same exception.
+If the worker factory throws an exception, or if the worker fails to start due to an exception, then the exception is thrown here. If retries are not enabled (default), subsequent calls to `LeaseAsync` will throw the same exception.
 
 If a vote to cancel succeeds (see below), `OperationCanceledException` will be thrown, and `LeaseAsync` can be called again to retry.
 
@@ -69,7 +81,7 @@ Defining the runner.
 
 ```csharp
 // Keep the worker alive for 5 minutes after the last user leaves.
-var options = new OnDemandOptions(OnDemandReleasePolicy.ReleaseAfterDelay, TimeSpan.FromMinutes(5));
+var options = new OnDemandOptions { ReleasePolicy = new(OnDemandReleasePolicyType.ReleaseAfterDelay, TimeSpan.FromMinutes(5)) };
 
 // Define a factory that passes dependencies to the worker constructor.
 Func<MyWorker> workerFactory = () => new MyWorker(someDependency);

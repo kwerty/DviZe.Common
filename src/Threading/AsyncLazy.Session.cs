@@ -11,6 +11,7 @@ partial class AsyncLazy<T>
         readonly Task<T> runTask;
         readonly CancellationTokenSource cts = new();
         int uncancelledCount;
+        volatile bool closed;
 
         public Session(Func<CancellationToken, Task<T>> valueFactory, bool canRetry)
         {
@@ -22,12 +23,12 @@ partial class AsyncLazy<T>
                 }
                 catch (OperationCanceledException) when (cts.IsCancellationRequested)
                 {
-                    Closed = true;
+                    closed = true;
                     throw;
                 }
                 catch when (canRetry)
                 {
-                    Closed = true;
+                    closed = true;
                     throw;
                 }
                 finally
@@ -37,11 +38,11 @@ partial class AsyncLazy<T>
             });
         }
 
-        public bool Closed { get; private set; }
+        public bool Closed => closed;
 
         public async Task<T> GetResultAsync(CancellationToken cancellationToken)
         {
-            if (Closed)
+            if (closed)
             {
                 throw new SessionClosedException();
             }

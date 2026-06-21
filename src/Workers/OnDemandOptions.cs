@@ -1,28 +1,14 @@
-﻿using System;
-
-namespace Kwerty.DviZe.Workers;
+﻿namespace Kwerty.DviZe.Workers;
 
 public sealed class OnDemandOptions
 {
-    public OnDemandOptions(OnDemandReleasePolicy? releaseAction = null, TimeSpan? releaseDelay = null)
+    public bool CanRetry { get; init; }
+
+    public OnDemandReleasePolicy ReleasePolicy
     {
-        ReleasePolicy = releaseAction ?? OnDemandReleasePolicy.ReleaseImmediately;
-
-        if (ReleasePolicy == OnDemandReleasePolicy.ReleaseAfterDelay)
-        {
-            if (!releaseDelay.HasValue
-                || releaseDelay.Value == TimeSpan.Zero)
-            {
-                throw new ArgumentOutOfRangeException(nameof(releaseDelay));
-            }
-
-            ReleaseDelay = releaseDelay.Value;
-        }
-    }
-
-    public OnDemandReleasePolicy ReleasePolicy { get; }
-
-    public TimeSpan? ReleaseDelay { get; }
+        get;
+        init => field = value ?? OnDemandReleasePolicy.Default;
+    } = OnDemandReleasePolicy.Default;
 
     public static OnDemandOptions Default { get; } = new();
 }
