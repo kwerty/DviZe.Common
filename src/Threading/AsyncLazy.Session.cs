@@ -42,11 +42,6 @@ partial class AsyncLazy<T>
 
         public async Task<T> GetResultAsync(CancellationToken cancellationToken)
         {
-            if (closed)
-            {
-                throw new SessionClosedException();
-            }
-
             IDisposable ctRegistration = null;
 
             if (!runTask.IsCompleted)
@@ -74,12 +69,12 @@ partial class AsyncLazy<T>
             }
             catch (OperationCanceledException) when (cts.IsCancellationRequested)
             {
-                if (ctRegistration == null)
+                if (!cancellationToken.IsCancellationRequested)
                 {
                     throw new SessionClosedException();
                 }
 
-                throw; // Could throw a new OCE with the user's CT, but don't really see the point.
+                throw new OperationCanceledException(cancellationToken);
             }
             finally
             {
