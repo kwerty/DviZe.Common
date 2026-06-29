@@ -46,6 +46,8 @@ public sealed class AsyncLazy<T>
             catch (OperationCanceledException) when (request.Result.IsCanceled)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+
+                // Earlier callers voted to cancel, go next.
             }
         }
     }
