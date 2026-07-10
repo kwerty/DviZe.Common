@@ -10,8 +10,8 @@ public sealed class RunSingle<TWorker>(ILoggerFactory loggerFactory) : IWorkerPr
 {
     readonly Lock lockObj = new();
     readonly TaskCompletionSource stoppedEventSrc = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    TWorker worker;
     WorkerContext<TWorker> workerContext;
+    bool started;
     bool closed;
 
     public async Task StartWorkerAsync(TWorker worker, CancellationToken cancellationToken = default)
@@ -48,7 +48,7 @@ public sealed class RunSingle<TWorker>(ILoggerFactory loggerFactory) : IWorkerPr
 
         lock (lockObj)
         {
-            this.worker = worker;
+            started = true;
         }
 
         _ = workerContext.Stopped.ContinueWith(stoppedEventSrc.SetFromTask, 
@@ -79,16 +79,27 @@ public sealed class RunSingle<TWorker>(ILoggerFactory loggerFactory) : IWorkerPr
         {
             await workerContext.DisposeAsync().ConfigureAwait(false);
         }
-        
-        stoppedEventSrc.TrySetCanceled();
+
+        if (!started)
+        {
+            stoppedEventSrc.SetCanceled();
+        }
     }
 
     bool IWorkerProvider<TWorker>.TryGet(out TWorker worker)
     {
         lock (lockObj)
         {
-            worker = this.worker;
-            return worker != null;
+            ObjectDisposedException.ThrowIf(closed, this);
+
+            if (!started)
+            {
+                worker = null;
+                return false;
+            }
+
+            worker = workerContext.Worker;
+            return started;
         }
     }
 
@@ -96,12 +107,14 @@ public sealed class RunSingle<TWorker>(ILoggerFactory loggerFactory) : IWorkerPr
     {
         lock (lockObj)
         {
-            if (worker == null)
+            ObjectDisposedException.ThrowIf(closed, this);
+
+            if (!started)
             {
                 throw new InvalidOperationException();
             }
 
-            return Task.FromResult(new WorkerLease<TWorker>(worker, IDisposable.NullDisposable));
+            return Task.FromResult(new WorkerLease<TWorker>(workerContext.Worker, IDisposable.NullDisposable));
         }
     }
 }
