@@ -47,7 +47,6 @@ public sealed class OnDemand<TWorker> : IWorkerProvider<TWorker>, IAsyncDisposab
     {
     }
 
-
     public OnDemand(Func<TWorker> workerFactory, ILoggerFactory loggerFactory)
         : this(OnDemandOptions.Default, workerFactory, loggerFactory)
     {
@@ -301,5 +300,5 @@ public sealed class OnDemand<TWorker> : IWorkerProvider<TWorker>, IAsyncDisposab
         public void Dispose() => cts.Cancel();
     }
 
-    public class SessionClosedException : Exception;
+    sealed class SessionClosedException : Exception;
 }
