@@ -2,7 +2,7 @@
 
 public sealed class OnDemandOptions
 {
-    public bool CanRetry { get; init; }
+    public OnDemandRetryPolicy RetryPolicy { get; init;  } = OnDemandRetryPolicy.None;
 
     public OnDemandReleasePolicy ReleasePolicy
     {

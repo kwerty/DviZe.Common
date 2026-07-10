@@ -20,13 +20,11 @@ Returns an `IDisposable` which **must** be disposed when the user is done. It is
 public ValueTask DisposeAsync();
 ```
 
-Closes the gate, preventing future access, and asynchronously waits for all existing users to leave.
+Closes the gate (if not already closed) and asynchronously waits for all existing users to leave.
 
 Once this method returns, it is guaranteed nobody is accessing the shared resource.
 
 ⚠️ If a user fails to leave, this will hang forever.
-
-Calling `DisposeAsync` more than once is a no-op.
 
 ## Examples
 

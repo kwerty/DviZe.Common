@@ -8,7 +8,7 @@ namespace Kwerty.DviZe.Threading;
 public sealed class AsyncGate : IAsyncDisposable
 {
     readonly Lock lockObj = new();
-    readonly TaskCompletionSource tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    readonly TaskCompletionSource tcs = new();
     int userCount;
     bool closed;
 
@@ -25,32 +25,39 @@ public sealed class AsyncGate : IAsyncDisposable
         {
             lock (lockObj)
             {
-                if (--userCount == 0
-                    && closed)
+                if (--userCount > 0
+                    || !closed)
                 {
-                    tcs.SetResult();
+                    return;
                 }
             }
+
+            tcs.SetResult();
         });
     }
 
     public async ValueTask DisposeAsync()
     {
+        var didClose = false;
+
         lock (lockObj)
         {
-            if (closed)
+            if (!closed)
             {
-                return;
-            }
+                closed = true;
 
-            closed = true;
-
-            if (userCount == 0)
-            {
-                tcs.SetResult();
+                if (userCount == 0)
+                {
+                    didClose = true;
+                }
             }
         }
 
+        if (didClose)
+        {
+            tcs.SetResult();
+        }
+        
         await tcs.Task.ConfigureAwait(false);
     }
 }

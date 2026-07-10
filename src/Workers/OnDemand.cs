@@ -1,4 +1,5 @@
 ﻿using Kwerty.DviZe.Common;
+using Kwerty.DviZe.Threading;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Threading;
@@ -10,19 +11,17 @@ namespace Kwerty.DviZe.Workers;
 /// Provides access to a shared worker of type <typeparamref name="TWorker"/>, which will be created
 /// and started on-demand, then stopped when there are no more users.
 /// </summary>
-public sealed partial class OnDemand<TWorker> : IWorkerProvider<TWorker>, IAsyncDisposable where TWorker : Worker
+public sealed class OnDemand<TWorker> : IWorkerProvider<TWorker>, IAsyncDisposable where TWorker : Worker
 {
     readonly Lock lockObj = new();
     readonly OnDemandOptions options;
     readonly Func<TWorker> workerFactory;
     readonly ILoggerFactory loggerFactory;
     readonly Runner<Session> sessionRunner;
-    readonly Runner<User> userRunner;
-    Session session;
+    Session currSession;
     bool closed;
 
-    // First arg distinguishes from public constructor with the same params.
-    OnDemand(object _, OnDemandOptions options, Func<TWorker> workerFactory, ILoggerFactory loggerFactory)
+    public OnDemand(OnDemandOptions options, Func<TWorker> workerFactory, ILoggerFactory loggerFactory)
     {
         ArgumentNullException.ThrowIfNull(options, nameof(options));
         ArgumentNullException.ThrowIfNull(workerFactory, nameof(workerFactory));
@@ -31,27 +30,26 @@ public sealed partial class OnDemand<TWorker> : IWorkerProvider<TWorker>, IAsync
         this.options = options;
         this.workerFactory = workerFactory;
         this.loggerFactory = loggerFactory;
-        sessionRunner = new(loggerFactory);
-        userRunner = new(loggerFactory);
-    }
-
-    public OnDemand(ILoggerFactory loggerFactory)
-        : this(null, OnDemandOptions.Default, GetDefaultWorkerFactory(), loggerFactory)
-    {
+        sessionRunner = new Runner<Session>(loggerFactory);
     }
 
     public OnDemand(OnDemandOptions options, ILoggerFactory loggerFactory)
-        : this(null, options, GetDefaultWorkerFactory(), loggerFactory)
+        : this(options, Activator.CreateInstance<TWorker>, loggerFactory)
+    {
+        if (typeof(TWorker).GetConstructor(Type.EmptyTypes) == null)
+        {
+            throw new InvalidOperationException($"{typeof(TWorker).Name} must have a parameterless constructor, or a worker factory must be supplied.");
+        }
+    }
+
+    public OnDemand(ILoggerFactory loggerFactory)
+        : this(OnDemandOptions.Default, loggerFactory)
     {
     }
+
 
     public OnDemand(Func<TWorker> workerFactory, ILoggerFactory loggerFactory)
-        : this(null, OnDemandOptions.Default, WorkerFactoryFromUser(workerFactory), loggerFactory)
-    {
-    }
-
-    public OnDemand(OnDemandOptions options, Func<TWorker> workerFactory, ILoggerFactory loggerFactory)
-        : this(null, options, WorkerFactoryFromUser(workerFactory), loggerFactory)
+        : this(OnDemandOptions.Default, workerFactory, loggerFactory)
     {
     }
 
@@ -65,15 +63,37 @@ public sealed partial class OnDemand<TWorker> : IWorkerProvider<TWorker>, IAsync
     /// </summary>
     public async Task<WorkerLease<TWorker>> LeaseAsync(CancellationToken cancellationToken = default)
     {
-        if (session?.CachedResult != null)
+        while (true)
         {
-            var worker = await session.CachedResult.ConfigureAwait(false);
-            return new WorkerLease<TWorker>(worker, IDisposable.NullDisposable);
-        }
+            Session session;
 
-        var user = new User(this);
-        await userRunner.StartWorkerAsync(user, cancellationToken).ConfigureAwait(false);
-        return new WorkerLease<TWorker>(user.Session.Worker, user);
+            lock (lockObj)
+            {
+                ObjectDisposedException.ThrowIf(closed, this);
+
+                if (currSession == null
+                    || currSession.IsClosed)
+                {
+                    currSession = new Session(options, workerFactory, loggerFactory);
+                    _ = sessionRunner.StartWorkerAsync(currSession, CancellationToken.None); // Completes synchronously.
+                }
+
+                session = currSession;
+            }
+
+            IDisposable sessionReleaser;
+
+            try
+            {
+                sessionReleaser = await session.JoinAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (SessionClosedException)
+            {
+                continue;
+            }
+
+            return new WorkerLease<TWorker>(session.Worker, sessionReleaser);
+        }
     }
 
     public async ValueTask DisposeAsync()
@@ -86,49 +106,200 @@ public sealed partial class OnDemand<TWorker> : IWorkerProvider<TWorker>, IAsync
             }
 
             closed = true;
-
-            session?.Close();
-            session = null;
         }
 
-        await userRunner.DisposeAsync().ConfigureAwait(false);
         await sessionRunner.DisposeAsync().ConfigureAwait(false);
     }
 
-    Session GetSession()
+    sealed class Session : Worker
     {
-        lock (lockObj)
-        {
-            ObjectDisposedException.ThrowIf(closed, this);
+        readonly OnDemandOptions options;
+        readonly Func<TWorker> workerFactory;
+        readonly ILoggerFactory loggerFactory;
+        readonly AsyncGate initGate = new();
+        readonly AsyncLazy<WorkerContext<TWorker>> initLazy;
+        WorkerContext<TWorker> workerContext;
+        int userCount;
+        DelayedRelease delayedRelease;
 
-            if (session == null
-                || session.Closed)
+        public Session(OnDemandOptions options, Func<TWorker> workerFactory, ILoggerFactory loggerFactory)
+        {
+            this.options = options;
+            this.workerFactory = workerFactory;
+            this.loggerFactory = loggerFactory;
+            initLazy = new AsyncLazy<WorkerContext<TWorker>>(CreateWorkerContext,
+                canRetry: options.RetryPolicy.HasFlag(OnDemandRetryPolicy.RetryAfterWorkerFailedToStart));
+        }
+
+        public bool IsClosed => Context.StoppingToken.IsCancellationRequested;
+
+        public TWorker Worker => workerContext?.Worker;
+
+        public async Task<IDisposable> JoinAsync(CancellationToken cancellationToken)
+        {
+            IDisposable initGateReleaser = null;
+
+            lock (Context.LockObj)
             {
-                session = new Session(options, workerFactory, loggerFactory);
-                _ = sessionRunner.StartWorkerAsync(session, CancellationToken.None); // Starts synchronously.
+                if (IsClosed)
+                {
+                    throw new SessionClosedException();
+                }
+
+                if (Worker != null)
+                {
+                    return Join();
+                }
+
+                initGateReleaser = initGate.Enter();
             }
 
-            return session;
+            var didInit = false;
+
+            try
+            {
+                var workerContext = await initLazy.GetValueAsync(cancellationToken).ConfigureAwait(false);
+
+                lock (Context.LockObj)
+                {
+                    didInit = TrySetWorkerContext(workerContext);
+
+                    return Join();
+                }
+            }
+            finally
+            {
+                initGateReleaser.Dispose();
+
+                if (didInit)
+                {
+                    await initGate.DisposeAsync().ConfigureAwait(false);
+
+                    OnInitialized();
+                }
+            }
+        }
+
+        IDisposable Join()
+        {
+            lock (Context.LockObj)
+            {
+                if (IsClosed)
+                {
+                    throw new SessionClosedException();
+                }
+
+                delayedRelease?.Dispose();
+                userCount++;
+
+                return IDisposable.FromCallback(Leave);
+            }
+        }
+
+        void Leave()
+        {
+            lock (Context.LockObj)
+            {
+                if (--userCount > 0
+                    || IsClosed)
+                {
+                    return;
+                }
+
+                if (options.ReleasePolicy.Type == OnDemandReleasePolicyType.ReleaseImmediately)
+                {
+                    Context.TryStop();
+                }
+                else if (options.ReleasePolicy.Type == OnDemandReleasePolicyType.ReleaseAfterDelay)
+                {
+                    delayedRelease = new DelayedRelease(Context, options.ReleasePolicy.Delay.Value);
+                }
+            }
+        }
+
+        bool TrySetWorkerContext(WorkerContext<TWorker> workerContext)
+        {
+            lock (Context.LockObj)
+            {
+                if (this.workerContext != null)
+                {
+                    return false;
+                }
+
+                this.workerContext = workerContext;
+                return true;
+            }
+        }
+
+        void OnInitialized()
+        {
+            if (options.RetryPolicy.HasFlag(OnDemandRetryPolicy.RetryAfterWorkerStopped))
+            {
+                _ = workerContext.Stopped.ContinueWith(_ => Context.TryStop(),
+                    Context.StoppingToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default);
+            }
+
+            if (options.RetryPolicy.HasFlag(OnDemandRetryPolicy.RetryAfterWorkerFaulted))
+            {
+                _ = workerContext.Stopped.ContinueWith(_ => Context.TryStop(),
+                    Context.StoppingToken, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+            }
+        }
+
+        protected internal override async Task OnStoppingAsync()
+        {
+            await initGate.DisposeAsync().ConfigureAwait(false);
+
+            if (workerContext != null)
+            {
+                await workerContext.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+
+        async Task<WorkerContext<TWorker>> CreateWorkerContext(CancellationToken cancellationToken)
+        {
+            var worker = workerFactory()
+                ?? throw new InvalidOperationException("Worker factory returned null.");
+
+            var workerContext = new WorkerContext<TWorker>(worker, loggerFactory);
+            await workerContext.StartAsync(cancellationToken).ConfigureAwait(false);
+            return workerContext;
         }
     }
 
-    static Func<TWorker> GetDefaultWorkerFactory()
+    sealed class DelayedRelease : IDisposable
     {
-        if (typeof(TWorker).GetConstructor(Type.EmptyTypes) == null)
+        readonly CancellationTokenSource cts;
+
+        public DelayedRelease(WorkerContext sessionContext, TimeSpan delay)
         {
-            throw new NotImplementedException($"{typeof(TWorker).Name} must have a parameterless constructor, or a worker factory must be supplied.");
+            cts = CancellationTokenSource.CreateLinkedTokenSource(sessionContext.StoppingToken);
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(delay, cts.Token).ConfigureAwait(false);
+
+                    lock (sessionContext.LockObj)
+                    {
+                        cts.Token.ThrowIfCancellationRequested();
+
+                        sessionContext.TryStop();
+                    }
+                }
+                catch (OperationCanceledException) when (cts.IsCancellationRequested)
+                {
+                }
+                finally
+                {
+                    cts.Dispose();
+                }
+            });
         }
 
-        return Activator.CreateInstance<TWorker>;
+        public void Dispose() => cts.Cancel();
     }
 
-    static Func<TWorker> WorkerFactoryFromUser(Func<TWorker> workerFactory)
-    {
-        return () =>
-        {
-            return workerFactory() ?? throw new NotImplementedException();
-        };
-    }
-
-    class SessionClosedException : Exception;
+    public class SessionClosedException : Exception;
 }

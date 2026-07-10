@@ -27,7 +27,6 @@ internal sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable w
     readonly TaskCompletionSource startedEvtSrc = new(TaskCreationOptions.RunContinuationsAsynchronously);
     readonly TaskCompletionSource stoppedEvtSrc = new(TaskCreationOptions.RunContinuationsAsynchronously);
     readonly CancellationTokenSource stoppingTokenSrc = new();
-    readonly TWorker worker;
     readonly ILogger logger;
     WorkerState state;
     Task starting;
@@ -41,11 +40,13 @@ internal sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable w
             throw new InvalidOperationException("Worker already owned.");
         }
 
-        this.worker = worker;
+        Worker = worker;
         logger = loggerFactory.CreateLogger<WorkerContext<TWorker>>();
     }
 
     public override Lock LockObj { get; } = new();
+
+    public TWorker Worker { get; }
 
     public override WorkerState State => state;
 
@@ -68,7 +69,7 @@ internal sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable w
 
         try
         {
-            await worker.OnStartingAsync(new WorkerStartingContext(Complete, startedEvtSrc.Task, cancellationToken)).ConfigureAwait(false);
+            await Worker.OnStartingAsync(new WorkerStartingContext(Complete, startedEvtSrc.Task, cancellationToken)).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -129,7 +130,7 @@ internal sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable w
         {
             try
             {
-                await worker.OnStoppingAsync().ConfigureAwait(false);
+                await Worker.OnStoppingAsync().ConfigureAwait(false);
             }
             catch (Exception ex)
             {

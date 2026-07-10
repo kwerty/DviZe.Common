@@ -19,8 +19,17 @@ If a `workerFactory` is not provided, `TWorker` **must** have a parameterless co
 
 | Property          | Type                      | Description
 | :--               | :--                       | :--
-| `CanRetry`        | `bool`                    | Set to `true` to allow retrying after a worker factory exception.
-| `ReleasePolicy`   | `OnDemandReleasePolicy`   | Controls when the worker is stopped and released.
+| `RetryPolicy`     | `OnDemandRetryPolicy`     | Defines retry behavior.
+| `ReleasePolicy`   | `OnDemandReleasePolicy`   | Defines release behavior.
+
+### OnDemandRetryPolicy
+
+| Value                             | Description
+| :--                               | :--
+| `None`                            | If a worker fails to start, subsequent calls to `LeaseAsync` will re-throw the same exception.
+| `RetryAfterWorkerFailedToStart`   | If a worker fails to start, the next call to `LeaseAsync` creates a new worker.
+| `RetryAfterWorkerStopped`         | If a running worker self-stops, the next call to `LeaseAsync` creates a new worker.
+| `RetryAfterWorkerFaulted`         | If a running worker self-faults, the next call to `LeaseAsync` creates a new worker.
 
 ### OnDemandReleasePolicy
 
@@ -33,7 +42,7 @@ If a `workerFactory` is not provided, `TWorker` **must** have a parameterless co
 
 | Value                 | Description
 | :--                   | :--
-| `ReleaseImmediately`  | The worker is stopped and released when it is no longer in use.
+| `ReleaseImmediately`  | The worker is stopped when it is no longer in use.
 | `ReleaseAfterDelay`   | When the worker is no longer in use, continue to hold it for a specified period (`Delay`) before releasing. If `LeaseAsync` is called during this window, the timer is cancelled, and the worker remains active.
 | `NeverRelease`        | The worker is held until `DisposeAsync` is called.
 
