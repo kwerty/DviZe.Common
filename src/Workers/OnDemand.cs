@@ -297,7 +297,16 @@ public sealed class OnDemand<TWorker> : IWorkerProvider<TWorker>, IAsyncDisposab
             });
         }
 
-        public void Dispose() => cts.Cancel();
+        public void Dispose()
+        {
+            try
+            {
+                cts.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+        }
     }
 
     sealed class SessionClosedException : Exception;
