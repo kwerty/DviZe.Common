@@ -22,7 +22,7 @@ public abstract class WorkerContext
     public abstract bool TryStop(Exception exception = null);
 }
 
-internal sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable where TWorker : Worker
+public sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable where TWorker : Worker
 {
     readonly TaskCompletionSource startedEvtSrc = new(TaskCreationOptions.RunContinuationsAsynchronously);
     readonly TaskCompletionSource stoppedEvtSrc = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -35,6 +35,9 @@ internal sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable w
 
     public WorkerContext(TWorker worker, ILoggerFactory loggerFactory)
     {
+        ArgumentNullException.ThrowIfNull(worker);
+        ArgumentNullException.ThrowIfNull(loggerFactory);
+
         if (Interlocked.Exchange(ref worker.context, this) != null)
         {
             throw new InvalidOperationException("Worker already owned.");
