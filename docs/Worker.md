@@ -104,7 +104,7 @@ Context.TryStop(new InvalidOperationException());
 
 ## Advanced usage
 
-`WorkerStartingContext` provides an optional `Complete` method which immediately transitions the worker to the started state.
+`WorkerStartingContext` provides an optional `Complete` method which synchronously completes the state transition.
 
 ```csharp
 protected override async Task OnStartingAsync(WorkerStartingContext startingContext)
@@ -126,7 +126,7 @@ Calling `Complete` multiple times is a no-op.
 
 ⚠️ If `OnStartingAsync` throws after `Complete` has been called, it will be treated as an unhandled exception, and the runner will log a critical message.
 
-`WorkerStartingContext` also provides a `Completed` task which completes when the worker transitions to the started state, or is cancelled if the worker fails to start.
+`WorkerStartingContext` also provides a `Completed` task which represents the result of the state transition.
 
 ```csharp
 protected override async Task OnStartingAsync(WorkerStartingContext startingContext)

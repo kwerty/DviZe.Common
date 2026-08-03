@@ -57,68 +57,106 @@ public sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable whe
 
     public override Task Stopped => stoppedEvtSrc.Task;
 
-    public async Task StartAsync(CancellationToken cancellationToken)
+    public async Task StartAsync(CancellationToken cancellationToken = default)
     {
-        var completed = false;
-        var startingSrc = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resultSrc = new TaskCompletionSource();
+        var doneSrc = new TaskCompletionSource();
 
         lock (LockObj)
         {
             ObjectDisposedException.ThrowIf(closed, this);
 
             state = WorkerState.Starting;
-            starting = startingSrc.Task;
+            starting = doneSrc.Task;
         }
 
         try
         {
-            await Worker.OnStartingAsync(new WorkerStartingContext(Complete, startedEvtSrc.Task, cancellationToken)).ConfigureAwait(false);
+            try
+            {
+                await Worker.OnStartingAsync(new WorkerStartingContext(ex => Complete(ex), resultSrc.Task, cancellationToken)).ConfigureAwait(false);
+                Complete();
+            }
+            catch (Exception ex)
+            {
+                lock (LockObj)
+                {
+                    if (resultSrc.Task.IsCompleted)
+                    {
+                        logger.LogCritical(ex, $"Unhandled exception; OnStartingAsync faulted, but {nameof(WorkerStartingContext.Complete)} has already been called.");
+                        return;
+                    }
+
+                    if (ex is OperationCanceledException
+                        && cancellationToken.IsCancellationRequested)
+                    {
+                        Complete(cancelled: true);
+                        throw;
+                    }
+
+                    Complete(ex);
+                    throw;
+                }
+            }
+
+            await resultSrc.Task.ConfigureAwait(false);
         }
-        catch (Exception ex)
+        finally
+        {
+            doneSrc.SetResult();
+        }
+
+        void Complete(Exception exception = null, bool cancelled = false)
         {
             lock (LockObj)
             {
-                if (completed)
+                if (resultSrc.Task.IsCompleted)
                 {
-                    logger.LogCritical(ex, "Unhandled exception; OnStartingAsync faulted, but Complete has already been called.");
                     return;
                 }
 
-                completed = true;
-                state = WorkerState.Stopped;
-                _ = stoppingTokenSrc.CancelAsync();
-                startedEvtSrc.SetCanceled(CancellationToken.None);
-                stoppedEvtSrc.SetCanceled(CancellationToken.None);
-                startingSrc.SetResult();
-
-                throw;
-            }
-        }
-
-        Complete();
-
-
-        void Complete()
-        {
-            lock (LockObj)
-            {
-                if (!completed)
+                if (exception != null
+                    || cancelled)
                 {
-                    completed = true;
-                    state = WorkerState.Started;
-                    startedEvtSrc.SetResult();
-                    startingSrc.SetResult();
+                    state = WorkerState.Stopped;
+                    _ = stoppingTokenSrc.CancelAsync();
+                    startedEvtSrc.SetCanceled(CancellationToken.None);
+                    stoppedEvtSrc.SetCanceled(CancellationToken.None);
+
+                    if (exception != null)
+                    {
+                        resultSrc.SetException(exception);
+                    }
+                    else if (cancelled)
+                    {
+                        resultSrc.SetCanceled(CancellationToken.None);
+                    }
+                    return;
                 }
+
+                state = WorkerState.Started;
+                startedEvtSrc.SetResult();
+
+                resultSrc.SetResult();
             }
         }
     }
 
     public override bool TryStop(Exception exception = null)
     {
-        var stoppingSrc = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var doneSrc = new TaskCompletionSource();
 
         lock (LockObj)
         {
+            if (state == WorkerState.Inactive)
+            {
+                state = WorkerState.Stopped;
+                _ = stoppingTokenSrc.CancelAsync();
+                startedEvtSrc.SetCanceled(CancellationToken.None);
+                stoppedEvtSrc.SetCanceled(CancellationToken.None);
+                return true;
+            }
+
             if (state != WorkerState.Started)
             {
                 return false;
@@ -126,7 +164,7 @@ public sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable whe
 
             state = WorkerState.Stopping;
             _ = stoppingTokenSrc.CancelAsync();
-            stopping = stoppingSrc.Task;
+            stopping = doneSrc.Task;
         }
 
         _ = Task.Run(async () =>
@@ -151,7 +189,7 @@ public sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable whe
                 {
                     stoppedEvtSrc.SetException(exception);
                 }
-                stoppingSrc.SetResult();
+                doneSrc.SetResult();
             }
         });
 
@@ -163,9 +201,9 @@ public sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable whe
     /// </summary>
     public async ValueTask DisposeAsync()
     {
-        if (Interlocked.Exchange(ref closed, true))
+        lock (LockObj)
         {
-            return;
+            closed = true;
         }
 
         while (true)
@@ -177,7 +215,7 @@ public sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable whe
                 switch (state)
                 {
                     case WorkerState.Inactive:
-                        state = WorkerState.Stopped;
+                        TryStop();
                         return;
 
                     case WorkerState.Starting:

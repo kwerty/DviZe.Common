@@ -6,9 +6,9 @@ namespace Kwerty.DviZe.Workers;
 
 public sealed class WorkerStartingContext
 {
-    readonly Action complete;
+    readonly Action<Exception> complete;
 
-    internal WorkerStartingContext(Action complete, Task completedEvt, CancellationToken cancellationToken)
+    internal WorkerStartingContext(Action<Exception> complete, Task completedEvt, CancellationToken cancellationToken)
     {
         this.complete = complete;
         Completed = completedEvt;
@@ -16,14 +16,12 @@ public sealed class WorkerStartingContext
     }
 
     /// <summary>
-    /// Immediately transitions the worker to the started state.
-    /// Calling multiple times, or calling outside of the context of <c>OnStartingAsync</c>, will be a no-op.
+    /// Synchronously completes the state transition. No-op if already transitioned.
     /// </summary>
-    public void Complete() => complete();
+    public void Complete(Exception exception = null) => complete(exception);
 
     /// <summary>
-    /// A task which completes when the worker has started. Will be cancelled if the worker fails to start.
-    /// Enables worker implementations to set up continuations on themselves.
+    /// The result of the state transition.
     /// </summary>
     public Task Completed { get; }
 
