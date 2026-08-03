@@ -80,7 +80,6 @@ public sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable whe
             try
             {
                 await Worker.OnStartingAsync(new WorkerStartingContext(Complete, resultSrc.Task, cancellationToken)).ConfigureAwait(false);
-                Complete();
             }
             catch (Exception ex)
             {
@@ -100,9 +99,12 @@ public sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable whe
                     {
                         Complete(ex);
                     }
+
                     throw;
                 }
             }
+
+            Complete();
 
             await resultSrc.Task.ConfigureAwait(false);
         }
@@ -208,6 +210,11 @@ public sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable whe
     {
         lock (LockObj)
         {
+            if (closed)
+            {
+                return;
+            }
+
             closed = true;
         }
 
