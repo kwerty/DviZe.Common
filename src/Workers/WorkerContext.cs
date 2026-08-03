@@ -66,6 +66,11 @@ public sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable whe
         {
             ObjectDisposedException.ThrowIf(closed, this);
 
+            if (state != WorkerState.Inactive)
+            {
+                throw new InvalidOperationException();
+            }
+
             state = WorkerState.Starting;
             starting = doneSrc.Task;
         }
