@@ -74,7 +74,7 @@ public sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable whe
         {
             try
             {
-                await Worker.OnStartingAsync(new WorkerStartingContext(ex => Complete(ex), resultSrc.Task, cancellationToken)).ConfigureAwait(false);
+                await Worker.OnStartingAsync(new WorkerStartingContext(Complete, resultSrc.Task, cancellationToken)).ConfigureAwait(false);
                 Complete();
             }
             catch (Exception ex)
@@ -90,7 +90,7 @@ public sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable whe
                     if (ex is OperationCanceledException
                         && cancellationToken.IsCancellationRequested)
                     {
-                        Complete(cancelled: true);
+                        Complete(cancel: true);
                         throw;
                     }
 
@@ -106,7 +106,7 @@ public sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable whe
             doneSrc.SetResult();
         }
 
-        void Complete(Exception exception = null, bool cancelled = false)
+        void Complete(Exception exception = null, bool cancel = false)
         {
             lock (LockObj)
             {
@@ -116,7 +116,7 @@ public sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable whe
                 }
 
                 if (exception != null
-                    || cancelled)
+                    || cancel)
                 {
                     state = WorkerState.Stopped;
                     _ = stoppingTokenSrc.CancelAsync();
@@ -127,9 +127,14 @@ public sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable whe
                     {
                         resultSrc.SetException(exception);
                     }
-                    else if (cancelled)
+                    else if (cancel
+                        && cancellationToken.IsCancellationRequested)
                     {
-                        resultSrc.SetCanceled(CancellationToken.None);
+                        resultSrc.SetCanceled(cancellationToken);
+                    }
+                    else
+                    {
+                        resultSrc.SetException(new OperationCanceledException(CancellationToken.None));
                     }
                     return;
                 }
