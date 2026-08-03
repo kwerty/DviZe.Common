@@ -59,8 +59,8 @@ public sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable whe
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
-        var doneSrc = new TaskCompletionSource();
-        var resultSrc = new TaskCompletionSource();
+        var doneSrc = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resultSrc = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         lock (LockObj)
         {
@@ -106,7 +106,7 @@ public sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable whe
 
             Complete();
 
-            await resultSrc.Task.ConfigureAwait(false);
+            await resultSrc.Task.ConfigureAwait(false); // Runs synchronously.
         }
         finally
         {
@@ -151,7 +151,7 @@ public sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable whe
 
     public override bool TryStop(Exception exception = null)
     {
-        var doneSrc = new TaskCompletionSource();
+        var doneSrc = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         lock (LockObj)
         {

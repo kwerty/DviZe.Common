@@ -55,7 +55,7 @@ public sealed class AsyncLazy<T>
     sealed class Request(Func<CancellationToken, Task<T>> valueFactory)
     {
         readonly CancellationTokenSource cts = new();
-        readonly TaskCompletionSource<T> resultSrc = new();
+        readonly TaskCompletionSource<T> resultSrc = new(TaskCreationOptions.RunContinuationsAsynchronously);
         bool initialized;
         int voteCount; // Represents the number of uncanceled voting tokens.
 
