@@ -26,7 +26,7 @@ public sealed class AsyncGate : IAsyncDisposable
             lock (lockObj)
             {
                 if (--userCount == 0
-                    && !closed)
+                    && closed)
                 {
                     tcs.SetResult();
                 }
