@@ -59,8 +59,8 @@ public sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable whe
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
-        var resultSrc = new TaskCompletionSource();
         var doneSrc = new TaskCompletionSource();
+        var resultSrc = new TaskCompletionSource();
 
         lock (LockObj)
         {
@@ -87,14 +87,14 @@ public sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable whe
                         return;
                     }
 
-                    if (ex is OperationCanceledException
-                        && cancellationToken.IsCancellationRequested)
+                    if (ex is OperationCanceledException)
                     {
                         Complete(cancel: true);
-                        throw;
                     }
-
-                    Complete(ex);
+                    else
+                    {
+                        Complete(ex);
+                    }
                     throw;
                 }
             }
@@ -127,14 +127,9 @@ public sealed class WorkerContext<TWorker> : WorkerContext, IAsyncDisposable whe
                     {
                         resultSrc.SetException(exception);
                     }
-                    else if (cancel
-                        && cancellationToken.IsCancellationRequested)
+                    else if (cancel)
                     {
-                        resultSrc.SetCanceled(cancellationToken);
-                    }
-                    else
-                    {
-                        resultSrc.SetException(new OperationCanceledException(CancellationToken.None));
+                        resultSrc.SetCanceled(CancellationToken.None);
                     }
                     return;
                 }
